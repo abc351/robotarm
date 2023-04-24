@@ -1,0 +1,1 @@
+lxterminal --command="sudo ./a ttyS0 8085"
