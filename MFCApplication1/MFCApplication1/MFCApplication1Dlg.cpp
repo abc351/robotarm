@@ -263,6 +263,7 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 	GetDlgItem(IDC_pic)->GetClientRect(&rect);
 
 	// 굵기 1, 빨간색, 실선 생성하기.
+	/*
 	CPen* pOldPen, pen;
 	pen.CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
 
@@ -278,7 +279,7 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 	memDC.SelectObject(pOldPen);
 
 	pen.DeleteObject();
-
+	*/
 	// 임시 버퍼를 Picture Control에 그린다.
 	dc.BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
 
@@ -309,7 +310,6 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 			t[i] = (short*)malloc(height * sizeof(short));
 		}
 	}
-	cout << "!" << endl;
 	dlib::point ltl = shape.part(37),
 		ltr = shape.part(38),
 		ll = shape.part(36),
@@ -334,8 +334,10 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 	int rby = max1(rbl.y(), rbr.y())+2;
 	int rrx = rr.x()+2;
 	int rlx = rl.x()-2;
-	//left
-	//cout << lrx << " " << llx << " " << lby << " " << lty;
+	int mlx = ml.x()-2;
+	int mrx = mr.x()+2;
+	int mty = mt.y()-2;
+	int mby = mb.y()+2;
 	int fx = (lrx - llx) / 2;
 	int fy = (lby - lty) / 2;
 	for (int i = llx; i < lrx ; i++) {
@@ -387,7 +389,6 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 			if (l[i][j] == 0) cnt2++;
 		}
 	lpb = (double)cnt2 / (double)cnt;
-	lpt += 0.2; lpb += 0.15;
 
 	fx = (rrx - rlx) / 2;
 	fy = (rby - rty) / 2;
@@ -439,19 +440,28 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 			if (r[i][j] == 0) cnt2++;
 		}
 	rpb = (double)cnt2 / (double)cnt;
-	rpt += 0.2; rpb += 0.15;
-
 	double pl, pr, pb, pt;
-	pl = lpl + rpl;
-	pr = lpr + rpr;
+	pl = lpl;// +rpl;
+	pr = rpr;// lpr + rpr;
 	pb = lpb + rpb;
 	pt = lpt + rpt;
-	//cout << setw(4) << pl << " " << pr << " " << pt << " " << pb << " ";
-	if (pt > pb * 1.2) cout << "b";
-	if (pt * 1.2 < pb) cout << "u";
-	if (pl > pr * 2) cout << "l";
-	if (pl * 2 < pr) cout << "r";
+	static double pls=0, prs=0, pbs=0, pts=0;
+	static int reset = -10;
 	
+	if (0<=reset&&reset < 10) {
+		pls += pl; prs += pr; pts += pt; pbs += pb;
+		if (reset == 9) {
+			pls /= 10; prs /= 10; pts /= 10; pbs /= 10;
+		}
+	}
+	if (reset < 10) reset++;
+	if(reset==10) {
+		pl -= pls; pr -= prs; pt -= pts; pb -= pbs;
+	}
+	pl += .4; pr += .4; pb += .4; pt += .4;
+	//cout << setw(4) << pl << " " << pr << " " << pt << " " << pb << " ";
+
+	/*
 	if (::rand() % 2==0) {
 		Mat e(100,200,CV_8SC3);
 		for(int i=0;i<100;i++)
@@ -466,14 +476,48 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 			}
 		for (int i = rlx; i < rrx; i++)
 			for (int j = rty; j < rby; j++) {
-				e.at<Vec3b>( j - rty, i - rlx)[0] = r[i][j] * 200;
+				if (e.at<Vec3b>(j - rty, i - rlx)[2] != 0 && r[i][j] != 0)
+					e.at<Vec3b>(j - rty, i - rlx)[1] = 200;
+				if (e.at<Vec3b>(j - rty, i - rlx)[2] == 0 && r[i][j] != 0)
+					e.at<Vec3b>( j - rty, i - rlx)[0] = 200;
 			}
+		
 		imshow("a", e);
 		cout << llx <<" "<< lrx << " " << lty << " " << lby<<endl;
 	}
-
-	
-
+	*/
+	bool blink;
+	{
+		static double oratio = -1;
+		double ratio = (double)(lrx - llx) / (double)(lby - lty) + (double)(rrx - rlx) / (double)(rby - rty);
+		if (oratio == -1) oratio = ratio;
+		else oratio = oratio * 0.9 + ratio * 0.1;
+		blink = (oratio - ratio < -1.2);
+	}
+	bool mouth;
+	{
+		static double oratio = -1;
+		double ratio = (double)(mrx - mlx) / (double)(mby - mty);
+		if (oratio == -1) oratio = ratio;
+		else oratio = oratio * 0.8 + ratio * 0.2;
+		//cout << oratio-ratio<< endl;
+		mouth = (oratio - ratio > 4);
+	}
+	static char fl=0, fr=0, fu=0, fd=0;
+	//cout << pl << " " << pr << " " << pt << " " << pb<<endl;
+	if (reset == 10) {
+		fl <<= 1; fr <<= 1; fu <<= 1; fd <<= 1;
+		fl |= (pl > pr * 2);
+		fr |= (pl * 2 < pr);
+		fu |= (pt * 1.5 < pb);
+		fd |= (pt > pb * 1.5);
+		if ((fu & 0xF) == 0xF) cout << "u";
+		else if ((fd & 0xF) == 0xF) cout << "d";
+		if ((fl & 0xF) == 0xF) cout << "l";
+		else if ((fr & 0xF) == 0xF) cout << "r";
+		if (blink) cout << "!";
+		if (mouth) cout << "?";
+	}
 	return ret;
 }
 
