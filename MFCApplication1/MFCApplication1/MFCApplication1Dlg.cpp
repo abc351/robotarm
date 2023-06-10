@@ -22,12 +22,12 @@ class CAboutDlg : public CDialogEx
 public:
 	CAboutDlg();
 
-// 대화 상자 데이터입니다.
+	// 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_ABOUTBOX };
 #endif
 
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 지원입니다.
 
 // 구현입니다.
@@ -54,6 +54,12 @@ END_MESSAGE_MAP()
 
 CMFCApplication1Dlg::CMFCApplication1Dlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_MFCAPPLICATION1_DIALOG, pParent)
+	, mdown(_T(""))
+	, mleft(_T(""))
+	, mright(_T(""))
+	, mup(_T(""))
+	, mv1(_T(""))
+	, mv2(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -62,6 +68,18 @@ void CMFCApplication1Dlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_pic, pic);
+	DDX_Text(pDX, IDC_down, mdown);
+	DDX_Text(pDX, IDC_left, mleft);
+	DDX_Text(pDX, IDC_right, mright);
+	DDX_Control(pDX, IDC_down, medown);
+	DDX_Control(pDX, IDC_left, meleft);
+	DDX_Control(pDX, IDC_right, meright);
+	DDX_Control(pDX, IDC_up, meup);
+	DDX_Text(pDX, IDC_up, mup);
+	DDX_Text(pDX, IDC_v1, mv1);
+	DDX_Control(pDX, IDC_v1, mev1);
+	DDX_Control(pDX, IDC_v2, mev2);
+	DDX_Text(pDX, IDC_v2, mv2);
 }
 
 BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
@@ -71,6 +89,9 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 	ON_WM_DESTROY()
 	ON_WM_TIMER()
 	ON_WM_CREATE()
+//	ON_EN_CHANGE(IDC_up, &CMFCApplication1Dlg::OnChangeUp)
+//ON_WM_KEYDOWN()
+//ON_WM_CHAR()
 END_MESSAGE_MAP()
 
 
@@ -223,85 +244,51 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 	assign_image(img, cv_image<bgr_pixel>(mat_frame));
 	pyramid_up(img);
 	std::vector<dlib::rectangle> dets = detector(img);
-	
 	if (dets.size() != 0) {
 		shape = sp(img, dets[0]);
 		detect(&img);
+		CClientDC dc(GetDlgItem(IDC_pic));
+		CRect rect;
+		GetDlgItem(IDC_pic)->GetClientRect(&rect);
+		CDC memDC;
+		CBitmap* pOldBitmap, bitmap;
+		memDC.CreateCompatibleDC(&dc);
+		bitmap.CreateCompatibleBitmap(&dc, rect.Width(), rect.Height());
+		pOldBitmap = memDC.SelectObject(&bitmap);
+		memDC.PatBlt(0, 0, rect.Width(), rect.Height(), BLACKNESS);
+		GetDlgItem(IDC_pic)->GetClientRect(&rect);
+		CImage m_img;
+		m_img.Attach(Mat2DIB(&mat_frame));
+		m_img.Draw(memDC.GetSafeHdc(), rect);
+		GetDlgItem(IDC_pic)->GetClientRect(&rect);
+		CPen* pOldPen, pen;
+		pen.CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
+		pOldPen = memDC.SelectObject(&pen);
+		memDC.MoveTo(shape.part(0).x(), shape.part(0).y());
+		for (int i = 0; i < shape.num_parts(); i++) {
+			memDC.LineTo(
+				(int)((double)shape.part(i).x() / (double)img.nc() * (double)rect.Width()),
+				(int)((double)shape.part(i).y() / (double)img.nr() * rect.Height()));
+		}
+		memDC.SelectObject(pOldPen);
+		pen.DeleteObject();
+		dc.BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
+		memDC.SelectObject(pOldBitmap);
+		memDC.DeleteDC();
+		bitmap.DeleteObject();
 	}
-	//이곳에 OpenCV 함수들을 적용합니다.
-	//여기에서는 그레이스케일 이미지로 변환합니다.
-	//cvtColor(mat_frame, mat_frame, COLOR_BGR2GRAY);
-	//화면에 보여주기 위한 처리입니다.
-	CClientDC dc(GetDlgItem(IDC_pic));
-
-	// Picture Control 크기를 얻는다.
-	CRect rect;
-	GetDlgItem(IDC_pic)->GetClientRect(&rect);
-
-	CDC memDC;
-	CBitmap* pOldBitmap, bitmap;
-
-	// Picture Control DC에 호환되는 새로운 CDC를 생성. (임시 버퍼)
-	memDC.CreateCompatibleDC(&dc);
-
-	// Picture Control의 크기와 동일한 비트맵을 생성.
-	bitmap.CreateCompatibleBitmap(&dc, rect.Width(), rect.Height());
-
-	// 임시 버퍼에서 방금 생성한 비트맵을 선택하면서, 이전 비트맵을 보존.
-	pOldBitmap = memDC.SelectObject(&bitmap);
-
-	// 임시 버퍼에 검은색으로 채움.
-	memDC.PatBlt(0, 0, rect.Width(), rect.Height(), BLACKNESS);
-
-	// 임시 버퍼에 그리는 동작을 수행.
-	//CRect rect;
-	GetDlgItem(IDC_pic)->GetClientRect(&rect);
-	CImage m_img;
-	m_img.Attach(Mat2DIB(&mat_frame));
-	m_img.Draw(memDC.GetSafeHdc(), rect);
-	//CRect rect;
-	GetDlgItem(IDC_pic)->GetClientRect(&rect);
-
-	// 굵기 1, 빨간색, 실선 생성하기.
-	/*
-	CPen* pOldPen, pen;
-	pen.CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
-
-	pOldPen = memDC.SelectObject(&pen);
-	memDC.MoveTo(shape.part(0).x(), shape.part(0).y());
-	for (int i = 0; i < shape.num_parts(); i++) {
-		memDC.LineTo(
-			(int)((double)shape.part(i).x()/(double)img.nc()*(double)rect.Width()),
-			(int)((double)shape.part(i).y()/ (double)img.nr()*rect.Height())
-		
-		);
-	}
-	memDC.SelectObject(pOldPen);
-
-	pen.DeleteObject();
-	*/
-	// 임시 버퍼를 Picture Control에 그린다.
-	dc.BitBlt(0, 0, rect.Width(), rect.Height(), &memDC, 0, 0, SRCCOPY);
-
-	// 이전 비트맵으로 재설정.
-	memDC.SelectObject(pOldBitmap);
-
-	// 생성한 리소스 해제.
-	memDC.DeleteDC();
-	bitmap.DeleteObject();
-
 	CDialogEx::OnTimer(nIDEvent);
 }
 #define max1(x,y) ((x>y)?x:y)
 #define min1(x,y) ((x<y)?x:y)
-int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
-	int ret=0;
+int CMFCApplication1Dlg::detect(array2d<bgr_pixel>* img) {
+	int ret = 0;
 	static short** l = 0, ** r = 0;
-	static short **t = 0;
+	static short** t = 0;
 	static int width, height;
 	if (l == 0) {
 		width = img->nr(); height = img->nc();
-		l = (short**)malloc(width*sizeof(short*));
+		l = (short**)malloc(width * sizeof(short*));
 		r = (short**)malloc(width * sizeof(short*));
 		t = (short**)malloc(width * sizeof(short*));
 		for (int i = 0; i < width; i++) {
@@ -326,21 +313,21 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 		mb = shape.part(66),
 		ml = shape.part(60),
 		mr = shape.part(64);
-	int lty = min1(ltl.y(), ltr.y())-2;
-	int lby = max1(lbl.y(), lbr.y())+2;
-	int lrx = lr.x()+2;
-	int llx = ll.x()-2;
-	int rty = min1(rtl.y(), rtr.y())-2;
-	int rby = max1(rbl.y(), rbr.y())+2;
-	int rrx = rr.x()+2;
-	int rlx = rl.x()-2;
-	int mlx = ml.x()-2;
-	int mrx = mr.x()+2;
-	int mty = mt.y()-2;
-	int mby = mb.y()+2;
+	int lty = min1(ltl.y(), ltr.y()) - 2;
+	int lby = max1(lbl.y(), lbr.y()) + 2;
+	int lrx = lr.x() + 2;
+	int llx = ll.x() - 2;
+	int rty = min1(rtl.y(), rtr.y()) - 2;
+	int rby = max1(rbl.y(), rbr.y()) + 2;
+	int rrx = rr.x() + 2;
+	int rlx = rl.x() - 2;
+	int mlx = ml.x() - 2;
+	int mrx = mr.x() + 2;
+	int mty = mt.y() - 2;
+	int mby = mb.y() + 2;
 	int fx = (lrx - llx) / 2;
 	int fy = (lby - lty) / 2;
-	for (int i = llx; i < lrx ; i++) {
+	for (int i = llx; i < lrx; i++) {
 		for (int j = lty; j < lby; j++) {
 			l[i][j] = ((*img)[j][i]).green;
 			__int64 temp = 0;
@@ -350,7 +337,7 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 					temp += (((*img)[b][a]).green); cnt++;
 				}
 			}
-			t[i][j] = temp/cnt;
+			t[i][j] = temp / cnt;
 			t[i][j] -= 10;
 		}
 	}
@@ -445,26 +432,23 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 	pr = rpr;// lpr + rpr;
 	pb = lpb + rpb;
 	pt = lpt + rpt;
-	static double pls=0, prs=0, pbs=0, pts=0;
+	static double pls = 0, prs = 0, pbs = 0, pts = 0;
 	static int reset = -10;
-	
-	if (0<=reset&&reset < 10) {
+
+	if (0 <= reset && reset < 10) {
 		pls += pl; prs += pr; pts += pt; pbs += pb;
 		if (reset == 9) {
 			pls /= 10; prs /= 10; pts /= 10; pbs /= 10;
 		}
 	}
 	if (reset < 10) reset++;
-	if(reset==10) {
+	if (reset == 10) {
 		pl -= pls; pr -= prs; pt -= pts; pb -= pbs;
 	}
 	pl += .4; pr += .4; pb += .4; pt += .4;
-	//cout << setw(4) << pl << " " << pr << " " << pt << " " << pb << " ";
-
-	/*
-	if (::rand() % 2==0) {
-		Mat e(100,200,CV_8SC3);
-		for(int i=0;i<100;i++)
+	if (::rand() % 2 == 0) {
+		Mat e(100, 200, CV_8SC3);
+		for (int i = 0; i < 100; i++)
 			for (int j = 0; j < 200; j++) {
 				e.at<Vec3b>(i, j)[0] = 0;
 				e.at<Vec3b>(i, j)[1] = 0;
@@ -479,13 +463,12 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 				if (e.at<Vec3b>(j - rty, i - rlx)[2] != 0 && r[i][j] != 0)
 					e.at<Vec3b>(j - rty, i - rlx)[1] = 200;
 				if (e.at<Vec3b>(j - rty, i - rlx)[2] == 0 && r[i][j] != 0)
-					e.at<Vec3b>( j - rty, i - rlx)[0] = 200;
+					e.at<Vec3b>(j - rty, i - rlx)[0] = 200;
 			}
-		
+
 		imshow("a", e);
-		cout << llx <<" "<< lrx << " " << lty << " " << lby<<endl;
+		//cout << llx << " " << lrx << " " << lty << " " << lby << endl;
 	}
-	*/
 	bool blink;
 	{
 		static double oratio = -1;
@@ -503,20 +486,52 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel> *img) {
 		//cout << oratio-ratio<< endl;
 		mouth = (oratio - ratio > 4);
 	}
-	static char fl=0, fr=0, fu=0, fd=0;
+	static char fl = 0, fr = 0, fu = 0, fd = 0;
 	//cout << pl << " " << pr << " " << pt << " " << pb<<endl;
 	if (reset == 10) {
 		fl <<= 1; fr <<= 1; fu <<= 1; fd <<= 1;
-		fl |= (pl > pr * 2);
-		fr |= (pl * 2 < pr);
-		fu |= (pt * 1.5 < pb);
-		fd |= (pt > pb * 1.5);
-		if ((fu & 0xF) == 0xF) cout << "u";
-		else if ((fd & 0xF) == 0xF) cout << "d";
-		if ((fl & 0xF) == 0xF) cout << "l";
-		else if ((fr & 0xF) == 0xF) cout << "r";
-		if (blink) cout << "!";
-		if (mouth) cout << "?";
+		fl |= (pl > pr * 3.5);
+		fr |= (pl * 3.5 < pr);
+		fu |= (pt * 2.5 < pb);
+		fd |= (pt > pb * 2.5);
+		/*
+		int ctrlid = GetFocus()->GetDlgCtrlID();
+		if (ctrlid == meup.GetDlgCtrlID()) ctrlid = -1;
+		else if (ctrlid == medown.GetDlgCtrlID()) ctrlid = -1;
+		else if (ctrlid == meleft.GetDlgCtrlID()) ctrlid = -1;
+		else if (ctrlid == meright.GetDlgCtrlID()) ctrlid = -1;
+		else if (ctrlid == mev1.GetDlgCtrlID()) ctrlid = -1;
+		else if (ctrlid == mev2.GetDlgCtrlID()) ctrlid = -1;*/
+		if ((fu & 0x3F) == 0x3F) {
+			cout << "u";
+			//if (ctrlid != -1) 
+				presskey(cup);
+		}
+		else if ((fd & 0x3F) == 0x3F) {
+			cout << "d";
+			//if (ctrlid != -1) 
+				presskey(cdown);
+		}
+		else if ((fl & 0x3F) == 0x3F) {
+			cout << "l";
+			//if (ctrlid != -1) 
+				presskey(cleft);
+		}
+		else if ((fr & 0x3F) == 0x3F) {
+			cout << "r";
+			//if (ctrlid != -1) 
+				presskey(cright);
+		}
+		else if (blink) {
+			cout << "!";
+			//if (ctrlid != -1) 
+				presskey(cv1);
+		}
+		else if (mouth) {
+			cout << "?";
+			//if (ctrlid != -1) 
+				presskey(cv2);
+		}
 	}
 	return ret;
 }
@@ -529,4 +544,57 @@ int CMFCApplication1Dlg::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	// TODO:  여기에 특수화된 작성 코드를 추가합니다.
 
 	return 0;
+}
+
+
+void CMFCApplication1Dlg::keyinput(const char key) {
+	int ctrlid = GetFocus()->GetDlgCtrlID();
+	if (ctrlid == meup.GetDlgCtrlID()) {
+		cup = key; meup.SetWindowTextW(map(key)); ::SetFocus(NULL);
+	}
+	else if (ctrlid == medown.GetDlgCtrlID()) {
+		cdown = key; medown.SetWindowTextW(map(key)); ::SetFocus(NULL);
+	}
+	else if (ctrlid == meleft.GetDlgCtrlID()) {
+		cleft = key; meleft.SetWindowTextW(map(key)); ::SetFocus(NULL);
+	}
+	else if (ctrlid == meright.GetDlgCtrlID()) {
+		cright = key; meright.SetWindowTextW(map(key)); ::SetFocus(NULL);
+	}
+	else if (ctrlid == mev1.GetDlgCtrlID()) {
+		cv1 = key; mev1.SetWindowTextW(map(key)); ::SetFocus(NULL);
+	}
+	else if (ctrlid == mev2.GetDlgCtrlID()) {
+		cv2 = key; mev2.SetWindowTextW(map(key)); ::SetFocus(NULL);
+	}
+}
+
+
+BOOL CMFCApplication1Dlg::PreTranslateMessage(MSG* pMsg)
+{
+	// TODO: 여기에 특수화된 코드를 추가 및/또는 기본 클래스를 호출합니다.
+	if (pMsg->message == WM_KEYDOWN) {
+		keyinput(pMsg->wParam);
+	}
+	return CDialogEx::PreTranslateMessage(pMsg);
+}
+void CMFCApplication1Dlg::presskey(char key) {
+
+	if (!key) return;
+	INPUT in;
+	UpdateData(1);
+	in.type = INPUT_KEYBOARD;
+	in.ki.wVk = key;
+	in.ki.wScan = 0;
+	in.ki.dwFlags = 0;
+	in.ki.time = 0;
+	in.ki.dwExtraInfo = 0;
+	SendInput(1, &in, sizeof in);
+	in.type = INPUT_KEYBOARD;
+	in.ki.wVk = key;
+	in.ki.wScan = 0;
+	in.ki.dwFlags = KEYEVENTF_KEYUP;
+	in.ki.time = 0;
+	in.ki.dwExtraInfo = 0; SendInput(1, &in, sizeof in);
+	UpdateData(0);
 }
