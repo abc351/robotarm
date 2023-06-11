@@ -13,7 +13,11 @@
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
-
+wchar_t* itoa(int a) {
+	static wchar_t data[100];
+	wsprintf(data, L"%d", a);
+	return data;
+}
 
 // 응용 프로그램 정보에 사용되는 CAboutDlg 대화 상자입니다.
 
@@ -60,6 +64,7 @@ CMFCApplication1Dlg::CMFCApplication1Dlg(CWnd* pParent /*=nullptr*/)
 	, mup(_T(""))
 	, mv1(_T(""))
 	, mv2(_T(""))
+	, mv3(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -80,6 +85,9 @@ void CMFCApplication1Dlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_v1, mev1);
 	DDX_Control(pDX, IDC_v2, mev2);
 	DDX_Text(pDX, IDC_v2, mv2);
+	DDX_Control(pDX, IDC_v3, mev3);
+	DDX_Text(pDX, IDC_v3, mv3);
+	DDX_Control(pDX, IDC_start, sbtn);
 }
 
 BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
@@ -92,6 +100,11 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 //	ON_EN_CHANGE(IDC_up, &CMFCApplication1Dlg::OnChangeUp)
 //ON_WM_KEYDOWN()
 //ON_WM_CHAR()
+//ON_BN_CLICKED(IDC_BUTTON1, &CMFCApplication1Dlg::OnClickedButton1)
+ON_EN_CHANGE(IDC_v3, &CMFCApplication1Dlg::OnChangeV3)
+ON_EN_KILLFOCUS(IDC_v3, &CMFCApplication1Dlg::OnKillfocusV3)
+ON_BN_CLICKED(IDC_start, &CMFCApplication1Dlg::OnClickedStart)
+ON_BN_CLICKED(IDC_reset, &CMFCApplication1Dlg::OnClickedReset)
 END_MESSAGE_MAP()
 
 
@@ -138,6 +151,9 @@ BOOL CMFCApplication1Dlg::OnInitDialog()
 	SetTimer(1000, 100, NULL);
 	detector = get_frontal_face_detector();
 	deserialize("shape_predictor_68_face_landmarks.dat") >> sp;
+	mev3.SetWindowText(CString(itoa(interval * 100)));
+	ison = false;
+	sbtn.SetWindowTextW(CString("시작"));
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
 
@@ -262,7 +278,8 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 		m_img.Draw(memDC.GetSafeHdc(), rect);
 		GetDlgItem(IDC_pic)->GetClientRect(&rect);
 		CPen* pOldPen, pen;
-		pen.CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
+		if(reset>=10) pen.CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
+		else pen.CreatePen(PS_SOLID, 1, RGB(0, 255, 255));
 		pOldPen = memDC.SelectObject(&pen);
 		memDC.MoveTo(shape.part(0).x(), shape.part(0).y());
 		for (int i = 0; i < shape.num_parts(); i++) {
@@ -433,8 +450,10 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel>* img) {
 	pb = lpb + rpb;
 	pt = lpt + rpt;
 	static double pls = 0, prs = 0, pbs = 0, pts = 0;
-	static int reset = -10;
-
+	if (reset == -11) {
+		reset = -10;
+		pls = 0, prs = 0, pbs = 0, pts = 0;
+	}
 	if (0 <= reset && reset < 10) {
 		pls += pl; prs += pr; pts += pt; pbs += pb;
 		if (reset == 9) {
@@ -446,6 +465,7 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel>* img) {
 		pl -= pls; pr -= prs; pt -= pts; pb -= pbs;
 	}
 	pl += .4; pr += .4; pb += .4; pt += .4;
+	/*
 	if (::rand() % 2 == 0) {
 		Mat e(100, 200, CV_8SC3);
 		for (int i = 0; i < 100; i++)
@@ -468,69 +488,70 @@ int CMFCApplication1Dlg::detect(array2d<bgr_pixel>* img) {
 
 		imshow("a", e);
 		//cout << llx << " " << lrx << " " << lty << " " << lby << endl;
-	}
+	}*/
 	bool blink;
+	bool bt;
+	static char blinkflag = 0;
 	{
 		static double oratio = -1;
+		static double oy = -1;
 		double ratio = (double)(lrx - llx) / (double)(lby - lty) + (double)(rrx - rlx) / (double)(rby - rty);
-		if (oratio == -1) oratio = ratio;
-		else oratio = oratio * 0.9 + ratio * 0.1;
-		blink = (oratio - ratio < -1.2);
+		double yv = (double)(lty + rty)/ (double)(lrx - llx);
+		if (oratio == -1) oratio = ratio,oy=yv;
+		else oratio = oratio * 0.9 + ratio * 0.1,oy=oy*0.8+ yv*.2;
+		bt = (oratio - ratio < -1.1)&&(oy-yv<-.05);
+		if (!(blinkflag&0xF)) blink = bt;
+		else blink = false;
+		blinkflag <<= 1;
+		blinkflag |= bt;
 	}
-	bool mouth;
+	bool lip;
+	bool lt;
+	static char lipflag = 0;
 	{
 		static double oratio = -1;
-		double ratio = (double)(mrx - mlx) / (double)(mby - mty);
+		double ratio = (double)(mrx - mlx+5) / (double)(mby - mty+5);
 		if (oratio == -1) oratio = ratio;
 		else oratio = oratio * 0.8 + ratio * 0.2;
-		//cout << oratio-ratio<< endl;
-		mouth = (oratio - ratio > 4);
+		lt = (oratio - ratio > 3);
+		if (!(lipflag & 0xF)) lip = lt;
+		else lip = false;
+		lipflag <<= 1;
+		lipflag |= lt;
 	}
 	static char fl = 0, fr = 0, fu = 0, fd = 0;
 	//cout << pl << " " << pr << " " << pt << " " << pb<<endl;
 	if (reset == 10) {
 		fl <<= 1; fr <<= 1; fu <<= 1; fd <<= 1;
-		fl |= (pl > pr * 3.5);
-		fr |= (pl * 3.5 < pr);
-		fu |= (pt * 2.5 < pb);
-		fd |= (pt > pb * 2.5);
-		/*
-		int ctrlid = GetFocus()->GetDlgCtrlID();
-		if (ctrlid == meup.GetDlgCtrlID()) ctrlid = -1;
-		else if (ctrlid == medown.GetDlgCtrlID()) ctrlid = -1;
-		else if (ctrlid == meleft.GetDlgCtrlID()) ctrlid = -1;
-		else if (ctrlid == meright.GetDlgCtrlID()) ctrlid = -1;
-		else if (ctrlid == mev1.GetDlgCtrlID()) ctrlid = -1;
-		else if (ctrlid == mev2.GetDlgCtrlID()) ctrlid = -1;*/
-		if ((fu & 0x3F) == 0x3F) {
-			cout << "u";
-			//if (ctrlid != -1) 
-				presskey(cup);
+		fl |= (pl > pr * 2.5);
+		fr |= (pl * 2.5 < pr);
+		fu |= (pt * 1.5 < pb);
+		fd |= (pt > pb * 1.3);
+
+		iv++;
+		if ((fu & 0xFF) == 0xFF) {
+			//cout << "u";
+			if(iv>=interval&&ison) iv=0, presskey(cup);
 		}
-		else if ((fd & 0x3F) == 0x3F) {
-			cout << "d";
-			//if (ctrlid != -1) 
-				presskey(cdown);
+		else if ((fd & 0xFF) == 0xFF) {
+			//cout << "d";
+			if (iv >= interval && ison) iv = 0, presskey(cdown);
 		}
-		else if ((fl & 0x3F) == 0x3F) {
-			cout << "l";
-			//if (ctrlid != -1) 
-				presskey(cleft);
+		else if ((fl & 0xFF) == 0xFF) {
+			//cout << "l";
+			if (iv >= interval && ison) iv = 0, presskey(cleft);
 		}
-		else if ((fr & 0x3F) == 0x3F) {
-			cout << "r";
-			//if (ctrlid != -1) 
-				presskey(cright);
+		else if ((fr & 0xFF) == 0xFF) {
+			//cout << "r";
+			if (iv >= interval && ison) iv = 0, presskey(cright);
 		}
 		else if (blink) {
-			cout << "!";
-			//if (ctrlid != -1) 
-				presskey(cv1);
+			//cout << "!";
+			if(ison) presskey(cv1);
 		}
-		else if (mouth) {
-			cout << "?";
-			//if (ctrlid != -1) 
-				presskey(cv2);
+		if (lip) {
+			//cout << "?";
+			if (ison) presskey(cv2);
 		}
 	}
 	return ret;
@@ -550,22 +571,22 @@ int CMFCApplication1Dlg::OnCreate(LPCREATESTRUCT lpCreateStruct)
 void CMFCApplication1Dlg::keyinput(const char key) {
 	int ctrlid = GetFocus()->GetDlgCtrlID();
 	if (ctrlid == meup.GetDlgCtrlID()) {
-		cup = key; meup.SetWindowTextW(map(key)); ::SetFocus(NULL);
+		cup = key; meup.SetWindowText(map(key)); ::SetFocus(NULL);
 	}
 	else if (ctrlid == medown.GetDlgCtrlID()) {
-		cdown = key; medown.SetWindowTextW(map(key)); ::SetFocus(NULL);
+		cdown = key; medown.SetWindowText(map(key)); ::SetFocus(NULL);
 	}
 	else if (ctrlid == meleft.GetDlgCtrlID()) {
-		cleft = key; meleft.SetWindowTextW(map(key)); ::SetFocus(NULL);
+		cleft = key; meleft.SetWindowText(map(key)); ::SetFocus(NULL);
 	}
 	else if (ctrlid == meright.GetDlgCtrlID()) {
-		cright = key; meright.SetWindowTextW(map(key)); ::SetFocus(NULL);
+		cright = key; meright.SetWindowText(map(key)); ::SetFocus(NULL);
 	}
 	else if (ctrlid == mev1.GetDlgCtrlID()) {
-		cv1 = key; mev1.SetWindowTextW(map(key)); ::SetFocus(NULL);
+		cv1 = key; mev1.SetWindowText(map(key)); ::SetFocus(NULL);
 	}
 	else if (ctrlid == mev2.GetDlgCtrlID()) {
-		cv2 = key; mev2.SetWindowTextW(map(key)); ::SetFocus(NULL);
+		cv2 = key; mev2.SetWindowText(map(key)); ::SetFocus(NULL);
 	}
 }
 
@@ -597,4 +618,42 @@ void CMFCApplication1Dlg::presskey(char key) {
 	in.ki.time = 0;
 	in.ki.dwExtraInfo = 0; SendInput(1, &in, sizeof in);
 	UpdateData(0);
+}
+
+
+
+
+void CMFCApplication1Dlg::OnChangeV3()
+{
+	int v = _wtoi(mv3.GetString())/100;
+	if (v > 0) interval = v;
+
+	// TODO:  여기에 컨트롤 알림 처리기 코드를 추가합니다.
+}
+
+
+void CMFCApplication1Dlg::OnKillfocusV3()
+{
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	UpdateData(1);
+	mev3.SetWindowText(CString(itoa(interval * 100)));
+	UpdateData(0);
+}
+
+
+void CMFCApplication1Dlg::OnClickedStart()
+{
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	UpdateData(1);
+	ison = !ison;
+	if(ison) sbtn.SetWindowTextW(CString("중지"));
+	else sbtn.SetWindowTextW(CString("시작"));
+	UpdateData(0);
+}
+
+
+void CMFCApplication1Dlg::OnClickedReset()
+{
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	reset = -11;
 }

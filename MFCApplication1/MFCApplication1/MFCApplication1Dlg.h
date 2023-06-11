@@ -12,7 +12,7 @@
 #include <dlib/opencv/cv_image.h>
 #include <dlib/geometry.h>
 #include <iostream>
-#pragma comment(linker, "/entry:wWinMainCRTStartup /subsystem:console")
+//#pragma comment(linker, "/entry:wWinMainCRTStartup /subsystem:console")
 using namespace cv;
 using namespace dlib;
 using namespace std;
@@ -118,4 +118,16 @@ public:
 	void keyinput(const char key);
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 	void presskey(char key);
+	CEdit mev3;
+	CString mv3;
+//	afx_msg void OnClickedButton1();
+	int interval = 10;
+	int iv = 0;
+	afx_msg void OnChangeV3();
+	afx_msg void OnKillfocusV3();
+	int reset = -10;
+	afx_msg void OnClickedStart();
+	afx_msg void OnClickedReset();
+	CButton sbtn;
+	bool ison = false;
 };
