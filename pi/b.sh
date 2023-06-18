@@ -1,1 +1,1 @@
-lxterminal --command="sudo ./a ttyS0 8085"
+lxterminal --command="sudo ./a ttyUSB0 8085 ttyACM0"
