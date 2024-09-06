@@ -1,4 +1,0 @@
-﻿  소스.cpp
-C:\Users\1r2da\source\repos\alpha\alpha\소스.cpp(26,1): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\1r2da\source\repos\alpha\alpha\소스.cpp(16,12): warning C4101: 'host' :참조되지 않은 지역 변수입니다.
-  alpha.vcxproj -> C:\Users\1r2da\source\repos\alpha\x64\Debug\alpha.exe
